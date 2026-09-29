@@ -1,0 +1,73 @@
+{{- if .Values.gateway.enabled }}
+{{- $gw := .Values.gateway }}
+{{- if $gw.gatewayClass.create }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ $gw.gatewayClass.name | quote }}
+spec:
+  controllerName: {{ $gw.gatewayClass.controllerName | quote }}
+---
+{{- end }}
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: {{ printf "%s-config" $gw.name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  scheme: {{ $gw.alb.scheme | quote }}
+---
+apiVersion: gateway.k8s.aws/v1
+kind: TargetGroupConfiguration
+metadata:
+  name: {{ printf "%s-targets" $gw.name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  targetReference:
+    name: {{ $gw.backend.serviceName | quote }}
+  defaultConfiguration:
+    targetType: {{ $gw.backend.targetType | quote }}
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $gw.name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  gatewayClassName: {{ $gw.gatewayClass.name | quote }}
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: {{ printf "%s-config" $gw.name | quote }}
+  listeners:
+    - name: {{ $gw.listener.name | quote }}
+      protocol: HTTP
+      port: {{ $gw.listener.port }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ printf "%s-route" $gw.name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  parentRefs:
+    - name: {{ $gw.name | quote }}
+      sectionName: {{ $gw.listener.name | quote }}
+  {{- with $gw.route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: {{ $gw.route.pathType | quote }}
+            value: {{ $gw.route.path | quote }}
+      backendRefs:
+        - name: {{ $gw.backend.serviceName | quote }}
+          port: {{ $gw.backend.servicePort }}
+{{- end }}
