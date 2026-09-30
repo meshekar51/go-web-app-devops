@@ -1,0 +1,48 @@
+name: ARC - 10 Runner Scaling Test
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+# Prevent two runs of this test from competing for the ten runners.
+concurrency:
+  group: arc-scale-test
+  cancel-in-progress: false
+
+jobs:
+  runner-test:
+    name: Runner ${{ matrix.number }}
+    runs-on: k8s-runners
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        number: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    steps:
+      - name: Show runner details
+        shell: bash
+        env:
+          JOB_NUMBER: ${{ matrix.number }}
+        run: |
+          echo "Job number: $JOB_NUMBER"
+          echo "Runner pod: $(hostname)"
+          echo "Started at: $(date -u)"
+          uname -a
+
+      - name: Keep the job running for five minutes
+        shell: bash
+        run: |
+          for minute in 1 2 3 4 5; do
+            echo "Minute $minute of 5 — running on $(hostname)"
+            sleep 60
+          done
+
+      - name: Finish
+        shell: bash
+        run: |
+          echo "Test completed on $(hostname)"
+          echo "Finished at: $(date -u)"
